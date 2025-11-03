@@ -21,18 +21,16 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
   
   const [formData, setFormData] = useState({
     codigo: "",
+    nome: "",
     descricao: "",
-    tipo: "",
-    cor: "",
-    liga: "",
+    categoria: "",
     peso: "",
     unidade: "UN",
-    preco_custo: "",
-    preco_venda: "",
+    custo: "",
+    preco: "",
     preco_por_kg: "",
-    localizacao: "",
-    quantidade_inicial: "0",
-    quantidade_minima: "10",
+    estoque: "0",
+    estoque_minimo: "10",
   });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,11 +53,20 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate required numeric fields
-    if (!formData.preco_venda || isNaN(parseFloat(formData.preco_venda))) {
+    // Calcular preço se temos preco_por_kg e peso
+    let precoFinal = formData.preco;
+    if (formData.preco_por_kg && formData.peso) {
+      const precoKg = parseFloat(formData.preco_por_kg);
+      const peso = parseFloat(formData.peso);
+      if (!isNaN(precoKg) && !isNaN(peso)) {
+        precoFinal = (peso * precoKg * 6).toString();
+      }
+    }
+
+    if (!precoFinal || isNaN(parseFloat(precoFinal))) {
       toast({
         title: "Erro de validação",
-        description: "Preço de venda é obrigatório e deve ser um número válido.",
+        description: "Preço é obrigatório. Informe o preço ou peso + preço por kg.",
         variant: "destructive",
       });
       return;
@@ -89,38 +96,23 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
         fotoUrl = publicUrl;
       }
 
-      // Insert product with validated values
-      // @ts-ignore - Temporary fix until types are regenerated
-      const { data: newProduct, error } = await supabase.from('produtos').insert({
+      const { error } = await supabase.from('produtos').insert({
         codigo: formData.codigo,
-        descricao: formData.descricao,
-        tipo: formData.tipo || null,
-        cor: formData.cor || null,
-        liga: formData.liga || null,
-        peso: formData.peso && !isNaN(parseFloat(formData.peso)) ? parseFloat(formData.peso) : null,
+        nome: formData.nome || formData.codigo,
+        descricao: formData.descricao || null,
+        categoria: formData.categoria || null,
+        peso: formData.peso && !isNaN(parseFloat(formData.peso)) ? parseFloat(formData.peso) : 0,
         unidade: formData.unidade,
-        preco_custo: formData.preco_custo && !isNaN(parseFloat(formData.preco_custo)) ? parseFloat(formData.preco_custo) : null,
-        preco_venda: parseFloat(formData.preco_venda),
-        preco_por_kg: formData.preco_por_kg && !isNaN(parseFloat(formData.preco_por_kg)) ? parseFloat(formData.preco_por_kg) : null,
-        localizacao: formData.localizacao || null,
-        foto_url: fotoUrl,
-      }).select().single();
+        custo: formData.custo && !isNaN(parseFloat(formData.custo)) ? parseFloat(formData.custo) : 0,
+        preco: parseFloat(precoFinal),
+        preco_por_kg: formData.preco_por_kg && !isNaN(parseFloat(formData.preco_por_kg)) ? parseFloat(formData.preco_por_kg) : 0,
+        estoque: parseInt(formData.estoque) || 0,
+        estoque_minimo: parseInt(formData.estoque_minimo) || 0,
+        imagem_url: fotoUrl,
+        ativo: true,
+      });
 
       if (error) throw error;
-
-      // Update stock with initial values
-      if (newProduct) {
-        // @ts-ignore - Temporary fix until types are regenerated
-        const { error: stockError } = await supabase
-          .from('estoque')
-          .update({
-            quantidade: parseFloat(formData.quantidade_inicial),
-            quantidade_minima: parseFloat(formData.quantidade_minima),
-          })
-          .eq('produto_id', newProduct.id);
-
-        if (stockError) throw stockError;
-      }
 
       toast({
         title: "Sucesso!",
@@ -130,18 +122,16 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
       setOpen(false);
       setFormData({
         codigo: "",
+        nome: "",
         descricao: "",
-        tipo: "",
-        cor: "",
-        liga: "",
+        categoria: "",
         peso: "",
         unidade: "UN",
-        preco_custo: "",
-        preco_venda: "",
+        custo: "",
+        preco: "",
         preco_por_kg: "",
-        localizacao: "",
-        quantidade_inicial: "0",
-        quantidade_minima: "10",
+        estoque: "0",
+        estoque_minimo: "10",
       });
       setImageFile(null);
       setImagePreview(null);
@@ -227,10 +217,19 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição *</Label>
+            <Label htmlFor="nome">Nome do Produto *</Label>
+            <Input
+              id="nome"
+              required
+              value={formData.nome}
+              onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="descricao">Descrição</Label>
             <Textarea
               id="descricao"
-              required
               value={formData.descricao}
               onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
             />
@@ -238,30 +237,11 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="tipo">Tipo</Label>
+              <Label htmlFor="categoria">Categoria</Label>
               <Input
-                id="tipo"
-                value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cor">Cor</Label>
-              <Input
-                id="cor"
-                value={formData.cor}
-                onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="liga">Liga</Label>
-              <Input
-                id="liga"
-                value={formData.liga}
-                onChange={(e) => setFormData({ ...formData, liga: e.target.value })}
+                id="categoria"
+                value={formData.categoria}
+                onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -278,81 +258,78 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="border rounded-lg p-4 bg-accent/5 space-y-4">
+            <h3 className="font-semibold text-sm">Preços</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="custo">Custo</Label>
+                <Input
+                  id="custo"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.custo}
+                  onChange={(e) => setFormData({ ...formData, custo: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="preco_por_kg">Preço por Kg/m *</Label>
+                <Input
+                  id="preco_por_kg"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.preco_por_kg}
+                  onChange={(e) => setFormData({ ...formData, preco_por_kg: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            {formData.preco_por_kg && formData.peso && (
+              <div className="text-sm bg-primary/10 p-3 rounded">
+                <strong>Preço Calculado:</strong> R$ {(parseFloat(formData.peso) * parseFloat(formData.preco_por_kg) * 6).toFixed(2)}
+                <p className="text-xs text-muted-foreground mt-1">Fórmula: peso x preço/kg x 6</p>
+              </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="preco_custo">Preço de Custo</Label>
+              <Label htmlFor="preco">Preço Manual (opcional)</Label>
               <Input
-                id="preco_custo"
+                id="preco"
                 type="number"
                 step="0.01"
                 min="0"
-                value={formData.preco_custo}
-                onChange={(e) => setFormData({ ...formData, preco_custo: e.target.value })}
-                placeholder="0.00"
+                value={formData.preco}
+                onChange={(e) => setFormData({ ...formData, preco: e.target.value })}
+                placeholder="Deixe vazio para calcular automaticamente"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="preco_venda">Preço de Venda *</Label>
-              <Input
-                id="preco_venda"
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.preco_venda}
-                onChange={(e) => setFormData({ ...formData, preco_venda: e.target.value })}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="preco_por_kg">Preço por Kg</Label>
-            <Input
-              id="preco_por_kg"
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.preco_por_kg}
-              onChange={(e) => setFormData({ ...formData, preco_por_kg: e.target.value })}
-              placeholder="0.00"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="localizacao">Localização no Galpão</Label>
-            <Input
-              id="localizacao"
-              value={formData.localizacao}
-              onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
-              placeholder="Ex: Prateleira A3, Setor 2"
-            />
           </div>
 
           <div className="border-t pt-4 mt-4">
             <h3 className="font-semibold mb-4">Estoque Inicial</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="quantidade_inicial">Quantidade Inicial</Label>
+                <Label htmlFor="estoque">Quantidade Inicial</Label>
                 <Input
-                  id="quantidade_inicial"
+                  id="estoque"
                   type="number"
                   step="1"
                   min="0"
-                  value={formData.quantidade_inicial}
-                  onChange={(e) => setFormData({ ...formData, quantidade_inicial: e.target.value })}
+                  value={formData.estoque}
+                  onChange={(e) => setFormData({ ...formData, estoque: e.target.value })}
                   placeholder="0"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="quantidade_minima">Quantidade Mínima</Label>
+                <Label htmlFor="estoque_minimo">Estoque Mínimo</Label>
                 <Input
-                  id="quantidade_minima"
+                  id="estoque_minimo"
                   type="number"
                   step="1"
                   min="0"
-                  value={formData.quantidade_minima}
-                  onChange={(e) => setFormData({ ...formData, quantidade_minima: e.target.value })}
+                  value={formData.estoque_minimo}
+                  onChange={(e) => setFormData({ ...formData, estoque_minimo: e.target.value })}
                   placeholder="10"
                 />
               </div>
