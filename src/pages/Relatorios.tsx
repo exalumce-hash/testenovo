@@ -278,7 +278,7 @@ export default function Relatorios() {
       const { data: pedidos } = await supabase
         .from('pedidos')
         .select('*, clientes(nome)')
-        .order('data_pedido', { ascending: false });
+        .order('data', { ascending: false });
 
       const doc = new jsPDF();
       doc.setFontSize(18);
@@ -291,7 +291,7 @@ export default function Relatorios() {
         p.clientes?.nome || '-',
         `R$ ${p.valor_total?.toFixed(2)}`,
         p.status,
-        new Date(p.data_pedido).toLocaleDateString('pt-BR')
+        new Date(p.data).toLocaleDateString('pt-BR')
       ]);
 
       autoTable(doc, {

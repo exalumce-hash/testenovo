@@ -1,7 +1,7 @@
 // @ts-nocheck - Temporary fix until Supabase types are regenerated
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShoppingCart, Phone, CheckCircle, XCircle, Clock, Package, Eye } from "lucide-react";
+import { ShoppingCart, Phone, CheckCircle, XCircle, Clock, Package, Eye, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,8 +52,9 @@ interface Pedido {
   numero: string;
   status: string;
   valor_total: number;
-  data_pedido: string;
+  data: string;
   observacoes: string | null;
+  origem: string | null;
   clientes: {
     nome: string;
     telefone: string | null;
@@ -93,8 +94,8 @@ export default function Pedidos() {
     try {
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, numero, status, valor_total, data_pedido, observacoes, clientes(nome, telefone)')
-        .order('data_pedido', { ascending: false });
+        .select('id, numero, status, valor_total, data, observacoes, origem, clientes(nome, telefone)')
+        .order('data', { ascending: false });
 
       if (error) throw error;
       setPedidos(data || []);
@@ -256,22 +257,69 @@ export default function Pedidos() {
                       <TableCell className="font-medium">{pedido.numero}</TableCell>
                       <TableCell>{pedido.clientes?.nome || '-'}</TableCell>
                       <TableCell>
-                        {new Date(pedido.data_pedido).toLocaleDateString('pt-BR')}
+                        {new Date(pedido.data).toLocaleDateString('pt-BR')}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         R$ {pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell>
-                        <Badge 
-                          variant={statusColors[pedido.status as keyof typeof statusColors] || "secondary"}
-                          className="gap-1"
-                        >
-                          <StatusIcon className="h-3 w-3" />
-                          {pedido.status}
-                        </Badge>
+                        <div className="flex gap-2">
+                          <Badge
+                            variant={statusColors[pedido.status as keyof typeof statusColors] || "secondary"}
+                            className="gap-1"
+                          >
+                            <StatusIcon className="h-3 w-3" />
+                            {pedido.status}
+                          </Badge>
+                          {pedido.origem === 'catalogo' && (
+                            <Badge variant="outline" className="text-xs">
+                              Catálogo
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {pedido.status === 'pendente' && pedido.origem === 'catalogo' && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={async () => {
+                                try {
+                                  const { data, error } = await supabase.rpc('aprovar_pedido_catalogo', {
+                                    pedido_id_param: pedido.id
+                                  });
+
+                                  if (error) throw error;
+
+                                  if (data && !data.success) {
+                                    toast({
+                                      title: "Erro",
+                                      description: data.message,
+                                      variant: "destructive",
+                                    });
+                                    return;
+                                  }
+
+                                  toast({
+                                    title: "Pedido aprovado!",
+                                    description: data.message || "Estoque debitado com sucesso",
+                                  });
+
+                                  fetchPedidos();
+                                } catch (error: any) {
+                                  toast({
+                                    title: "Erro ao aprovar",
+                                    description: error.message,
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              <Check className="h-4 w-4 mr-1" />
+                              Aprovar
+                            </Button>
+                          )}
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button

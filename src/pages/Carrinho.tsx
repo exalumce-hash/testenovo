@@ -144,7 +144,7 @@ export default function Carrinho() {
           cliente_id: cliente.id,
           status: 'pendente',
           valor_total: total,
-          data_pedido: new Date().toISOString(),
+          data: new Date().toISOString().split('T')[0],
           observacoes: observacoes || null,
         })
         .select()

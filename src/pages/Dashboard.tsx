@@ -79,16 +79,15 @@ export default function Dashboard() {
 
       // Fetch low stock items
       const { data: stockData, error: stockError } = await supabase
-        .from('estoque')
-        .select('quantidade, quantidade_minima, produtos(descricao)')
-        .lt('quantidade', 'quantidade_minima')
+        .from('produtos_estoque_baixo')
+        .select('nome, estoque, estoque_minimo')
         .limit(5);
 
       if (!stockError && stockData) {
         setLowStock(stockData.map(item => ({
-          produto: (item.produtos as any)?.descricao || '-',
-          estoque: item.quantidade,
-          minimo: item.quantidade_minima || 0,
+          produto: item.nome || '-',
+          estoque: item.estoque || 0,
+          minimo: item.estoque_minimo || 0,
         })));
       }
 

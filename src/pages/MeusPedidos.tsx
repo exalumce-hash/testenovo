@@ -19,7 +19,7 @@ interface Pedido {
   numero: string;
   status: string;
   valor_total: number;
-  data_pedido: string;
+  data: string;
 }
 
 const statusColors = {
@@ -60,9 +60,9 @@ export default function MeusPedidos() {
       // Buscar pedidos do cliente
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, numero, status, valor_total, data_pedido')
+        .select('id, numero, status, valor_total, data')
         .eq('cliente_id', cliente.id)
-        .order('data_pedido', { ascending: false });
+        .order('data', { ascending: false });
 
       if (error) throw error;
       setPedidos(data || []);
@@ -121,7 +121,7 @@ export default function MeusPedidos() {
                   <TableRow key={pedido.id}>
                     <TableCell className="font-medium">{pedido.numero}</TableCell>
                     <TableCell>
-                      {new Date(pedido.data_pedido).toLocaleDateString('pt-BR')}
+                      {new Date(pedido.data).toLocaleDateString('pt-BR')}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       R$ {pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
