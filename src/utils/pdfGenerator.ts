@@ -57,7 +57,7 @@ export async function gerarPDFOrcamento(
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(255, 255, 255);
-  doc.text(config.nome_empresa.toUpperCase(), pageWidth / 2, 20, { align: 'center' });
+  doc.text((config.nome_empresa || 'EMPRESA').toUpperCase(), pageWidth / 2, 20, { align: 'center' });
 
   // Informações da empresa em branco
   doc.setFontSize(9);

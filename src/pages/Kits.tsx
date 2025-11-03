@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import AddKitDialog from "@/components/produtos/AddKitDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,63 +26,68 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
-interface KitItem {
-  id: string;
-  kit_id: string;
-  produto_id: string;
-  quantidade: number;
-  produtos: {
-    codigo: string;
-    nome: string;
-    descricao: string;
-    preco: number;
-  };
-}
-
-interface Kit {
+interface Produto {
   id: string;
   codigo: string;
   nome: string;
   descricao: string | null;
-  preco_total: number;
+  categoria: string;
+  preco: number;
+  custo: number;
+  estoque: number;
+  estoque_minimo: number;
+  unidade: string;
+  peso: number | null;
+  imagem_url: string | null;
   ativo: boolean;
-  created_at: string;
-  kit_itens: KitItem[];
 }
 
 export default function Kits() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [kits, setKits] = useState<Kit[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kitToDelete, setKitToDelete] = useState<string | null>(null);
+  const [produtoToDelete, setProdutoToDelete] = useState<string | null>(null);
+  const [categoriaAtiva, setCategoriaAtiva] = useState<"Acessório Kit" | "Acessório Caixa">("Acessório Kit");
 
-  const fetchKits = async () => {
+  // Estado para adicionar/editar produto
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
+  const [formData, setFormData] = useState({
+    codigo: "",
+    nome: "",
+    descricao: "",
+    preco: "",
+    custo: "",
+    estoque: "",
+    estoque_minimo: "",
+  });
+
+  const fetchProdutos = async () => {
     try {
       const { data, error } = await supabase
-        .from('kits')
-        .select(`
-          *,
-          kit_itens (
-            id,
-            kit_id,
-            produto_id,
-            quantidade,
-            produtos (
-              codigo,
-              nome,
-              descricao,
-              preco
-            )
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .from('produtos')
+        .select('*')
+        .in('categoria', ['Acessório Kit', 'Acessório Caixa'])
+        .eq('ativo', true)
+        .order('nome');
 
       if (error) throw error;
-      setKits(data || []);
+      setProdutos(data || []);
     } catch (error: any) {
       toast({
-        title: "Erro ao carregar kits",
+        title: "Erro ao carregar produtos",
         description: error.message,
         variant: "destructive",
       });
@@ -92,181 +97,355 @@ export default function Kits() {
   };
 
   useEffect(() => {
-    fetchKits();
+    fetchProdutos();
   }, []);
 
-  const handleDeleteKit = async () => {
-    if (!kitToDelete) return;
+  const handleDeleteProduto = async () => {
+    if (!produtoToDelete) return;
 
     try {
       const { error } = await supabase
-        .from('kits')
-        .delete()
-        .eq('id', kitToDelete);
+        .from('produtos')
+        .update({ ativo: false })
+        .eq('id', produtoToDelete);
 
       if (error) throw error;
 
       toast({
-        title: "Kit excluído",
-        description: "Kit excluído com sucesso",
+        title: "Produto removido",
+        description: "Produto removido com sucesso",
       });
 
-      fetchKits();
+      fetchProdutos();
     } catch (error: any) {
       toast({
-        title: "Erro ao excluir kit",
+        title: "Erro ao remover produto",
         description: error.message,
         variant: "destructive",
       });
     } finally {
-      setKitToDelete(null);
+      setProdutoToDelete(null);
     }
   };
 
-  const toggleKitStatus = async (id: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('kits')
-        .update({ ativo: !currentStatus })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Status atualizado",
-        description: `Kit ${!currentStatus ? 'ativado' : 'desativado'} com sucesso`,
+  const handleOpenDialog = (produto?: Produto) => {
+    if (produto) {
+      setEditingProduto(produto);
+      setFormData({
+        codigo: produto.codigo,
+        nome: produto.nome,
+        descricao: produto.descricao || "",
+        preco: produto.preco.toString(),
+        custo: produto.custo.toString(),
+        estoque: produto.estoque.toString(),
+        estoque_minimo: produto.estoque_minimo.toString(),
       });
+    } else {
+      setEditingProduto(null);
+      setFormData({
+        codigo: "",
+        nome: "",
+        descricao: "",
+        preco: "",
+        custo: "",
+        estoque: "0",
+        estoque_minimo: "10",
+      });
+    }
+    setDialogOpen(true);
+  };
 
-      fetchKits();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      const produtoData = {
+        codigo: formData.codigo,
+        nome: formData.nome,
+        descricao: formData.descricao || null,
+        categoria: categoriaAtiva,
+        preco: parseFloat(formData.preco),
+        custo: parseFloat(formData.custo),
+        estoque: parseInt(formData.estoque),
+        estoque_minimo: parseInt(formData.estoque_minimo),
+        unidade: 'UN',
+        ativo: true,
+      };
+
+      if (editingProduto) {
+        const { error } = await supabase
+          .from('produtos')
+          .update(produtoData)
+          .eq('id', editingProduto.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Produto atualizado",
+          description: "Produto atualizado com sucesso",
+        });
+      } else {
+        const { error } = await supabase
+          .from('produtos')
+          .insert(produtoData);
+
+        if (error) throw error;
+
+        toast({
+          title: "Produto adicionado",
+          description: "Produto adicionado com sucesso",
+        });
+      }
+
+      setDialogOpen(false);
+      fetchProdutos();
     } catch (error: any) {
       toast({
-        title: "Erro ao atualizar status",
+        title: "Erro ao salvar produto",
         description: error.message,
         variant: "destructive",
       });
     }
   };
 
-  const filteredKits = kits.filter((kit) =>
-    kit.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    kit.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    kit.descricao?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const produtosFiltrados = produtos.filter((produto) => {
+    const matchSearch =
+      produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      produto.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (produto.descricao && produto.descricao.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchCategoria = produto.categoria === categoriaAtiva;
+
+    return matchSearch && matchCategoria;
+  });
 
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <h2 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Kits de Produtos
+            Acessórios e Componentes
           </h2>
           <p className="text-muted-foreground text-lg">
-            Gerencie os kits compostos por múltiplos produtos
+            Gerencie os acessórios para kits e caixas
           </p>
         </div>
-        <AddKitDialog onKitAdded={fetchKits} />
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={() => handleOpenDialog()}>
+              <Package className="h-4 w-4 mr-2" />
+              Novo Produto
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingProduto ? 'Editar Produto' : 'Adicionar Produto'}
+                </DialogTitle>
+                <DialogDescription>
+                  Categoria: {categoriaAtiva}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="codigo">Código *</Label>
+                    <Input
+                      id="codigo"
+                      required
+                      value={formData.codigo}
+                      onChange={(e) => setFormData({ ...formData, codigo: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nome">Nome *</Label>
+                    <Input
+                      id="nome"
+                      required
+                      value={formData.nome}
+                      onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="descricao">Descrição</Label>
+                  <Textarea
+                    id="descricao"
+                    value={formData.descricao}
+                    onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="custo">Custo *</Label>
+                    <Input
+                      id="custo"
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.custo}
+                      onChange={(e) => setFormData({ ...formData, custo: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="preco">Preço *</Label>
+                    <Input
+                      id="preco"
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.preco}
+                      onChange={(e) => setFormData({ ...formData, preco: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="estoque">Estoque Atual</Label>
+                    <Input
+                      id="estoque"
+                      type="number"
+                      value={formData.estoque}
+                      onChange={(e) => setFormData({ ...formData, estoque: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="estoque_minimo">Estoque Mínimo</Label>
+                    <Input
+                      id="estoque_minimo"
+                      type="number"
+                      value={formData.estoque_minimo}
+                      onChange={(e) => setFormData({ ...formData, estoque_minimo: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  {editingProduto ? 'Atualizar' : 'Adicionar'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <Card className="border-0 shadow-lg">
-        <div className="h-2 w-full bg-gradient-to-r from-primary via-accent to-primary"></div>
-        <CardHeader className="bg-gradient-to-br from-white to-blue-50/30">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10">
-              <Package className="h-5 w-5 text-primary" />
-            </div>
-            Lista de Kits
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar kits..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
+      <Tabs value={categoriaAtiva} onValueChange={(v) => setCategoriaAtiva(v as any)}>
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="Acessório Kit">Acessório Kit</TabsTrigger>
+          <TabsTrigger value="Acessório Caixa">Acessório Caixa</TabsTrigger>
+        </TabsList>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : filteredKits.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Nenhum kit encontrado
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Itens</TableHead>
-                  <TableHead>Preço Total</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredKits.map((kit) => (
-                  <TableRow key={kit.id}>
-                    <TableCell className="font-medium">{kit.codigo}</TableCell>
-                    <TableCell>{kit.nome}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {kit.descricao || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm space-y-1">
-                        {kit.kit_itens?.map((item) => (
-                          <div key={item.id} className="text-muted-foreground">
-                            {item.quantidade}x {item.produtos?.nome || item.produtos?.descricao}
+        <TabsContent value={categoriaAtiva} className="mt-6">
+          <Card className="border-0 shadow-lg">
+            <div className="h-2 w-full bg-gradient-to-r from-primary via-accent to-primary"></div>
+            <CardHeader className="bg-gradient-to-br from-white to-blue-50/30">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10">
+                  <Package className="h-5 w-5 text-primary" />
+                </div>
+                {categoriaAtiva}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-6">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar produtos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : produtosFiltrados.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum produto encontrado nesta categoria
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Custo</TableHead>
+                      <TableHead>Preço</TableHead>
+                      <TableHead>Estoque</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {produtosFiltrados.map((produto) => (
+                      <TableRow key={produto.id}>
+                        <TableCell className="font-medium">{produto.codigo}</TableCell>
+                        <TableCell>{produto.nome}</TableCell>
+                        <TableCell className="max-w-xs truncate">
+                          {produto.descricao || '-'}
+                        </TableCell>
+                        <TableCell>R$ {produto.custo.toFixed(2)}</TableCell>
+                        <TableCell>R$ {produto.preco.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant={produto.estoque <= produto.estoque_minimo ? "destructive" : "default"}>
+                            {produto.estoque} {produto.unidade}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenDialog(produto)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setProdutoToDelete(produto.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>R$ {kit.preco_total.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={kit.ativo ? "default" : "secondary"}
-                        className="cursor-pointer"
-                        onClick={() => toggleKitStatus(kit.id, kit.ativo)}
-                      >
-                        {kit.ativo ? "Ativo" : "Inativo"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setKitToDelete(kit.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-      <AlertDialog open={!!kitToDelete} onOpenChange={() => setKitToDelete(null)}>
+      <AlertDialog open={!!produtoToDelete} onOpenChange={() => setProdutoToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir este kit? Esta ação não pode ser desfeita.
+              Tem certeza que deseja remover este produto? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteKit}>
-              Excluir
+            <AlertDialogAction onClick={handleDeleteProduto}>
+              Remover
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
