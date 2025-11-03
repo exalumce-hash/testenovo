@@ -32,7 +32,8 @@ import {
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Produtos", url: "/produtos", icon: Package },
-  { title: "Kits", url: "/kits", icon: Boxes },
+  { title: "Kits Acessórios", url: "/kits", icon: Boxes },
+  { title: "Kits Montados", url: "/kits-montados", icon: Package },
   { title: "Estoque", url: "/estoque", icon: Warehouse },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Orçamentos", url: "/orcamentos", icon: FileText },

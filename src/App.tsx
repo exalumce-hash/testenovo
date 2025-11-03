@@ -8,6 +8,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Produtos from "./pages/Produtos";
 import Kits from "./pages/Kits";
+import KitsMontados from "./pages/KitsMontados";
 import Estoque from "./pages/Estoque";
 import Clientes from "./pages/Clientes";
 import Orcamentos from "./pages/Orcamentos";
@@ -93,6 +94,16 @@ const App = () => (
               <ProtectedRoute>
                 <AppLayout>
                   <Kits />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/kits-montados"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <KitsMontados />
                 </AppLayout>
               </ProtectedRoute>
             }
