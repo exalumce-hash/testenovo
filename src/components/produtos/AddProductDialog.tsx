@@ -75,27 +75,6 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
     setLoading(true);
 
     try {
-      let fotoUrl = null;
-
-      // Upload image if exists
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('produtos')
-          .upload(filePath, imageFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('produtos')
-          .getPublicUrl(filePath);
-
-        fotoUrl = publicUrl;
-      }
-
       const { error } = await supabase.from('produtos').insert({
         codigo: formData.codigo,
         nome: formData.nome || formData.codigo,
@@ -108,7 +87,7 @@ export default function AddProductDialog({ onProductAdded }: AddProductDialogPro
         preco_por_kg: formData.preco_por_kg && !isNaN(parseFloat(formData.preco_por_kg)) ? parseFloat(formData.preco_por_kg) : 0,
         estoque: parseInt(formData.estoque) || 0,
         estoque_minimo: parseInt(formData.estoque_minimo) || 0,
-        imagem_url: fotoUrl,
+        imagem_url: imagePreview || null,
         ativo: true,
       });
 

@@ -99,28 +99,6 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
     setLoading(true);
 
     try {
-      let fotoUrl = product.foto_url;
-
-      if (imageFile) {
-        const fileExt = imageFile.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('produtos')
-          .upload(filePath, imageFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('produtos')
-          .getPublicUrl(filePath);
-
-        fotoUrl = publicUrl;
-      } else if (!imagePreview) {
-        fotoUrl = null;
-      }
-
       const { error } = await supabase.from('produtos').update({
         codigo: formData.codigo,
         descricao: formData.descricao,
@@ -133,7 +111,7 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
         preco_custo: formData.preco_custo && !isNaN(parseFloat(formData.preco_custo)) ? parseFloat(formData.preco_custo) : null,
         preco_venda: parseFloat(formData.preco_venda),
         preco_por_kg: formData.preco_por_kg && !isNaN(parseFloat(formData.preco_por_kg)) ? parseFloat(formData.preco_por_kg) : null,
-        foto_url: fotoUrl,
+        foto_url: imagePreview || null,
       }).eq('id', product.id);
 
       if (error) throw error;
