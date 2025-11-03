@@ -41,13 +41,23 @@ interface Produto {
   estoque: number;
 }
 
+interface Kit {
+  id: string;
+  codigo: string;
+  nome: string;
+  preco_total: number;
+  estoque_disponivel: number;
+}
+
 interface ItemOrcamento {
-  produto_id: string;
+  produto_id?: string;
+  kit_id?: string;
   descricao: string;
   quantidade: number;
   preco_unitario: number;
   peso: number | null;
   desconto: number;
+  tipo: 'produto' | 'kit';
 }
 
 export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAdded: () => void }) {
@@ -55,10 +65,12 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
   const [loading, setLoading] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [kits, setKits] = useState<Kit[]>([]);
   const [clienteId, setClienteId] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
-  const [produtoSelecionado, setProdutoSelecionado] = useState("");
+  const [tipoItem, setTipoItem] = useState<'produto' | 'kit'>('produto');
+  const [itemSelecionado, setItemSelecionado] = useState("");
   const [quantidade, setQuantidade] = useState(1);
   const [desconto, setDesconto] = useState(0);
 
@@ -66,6 +78,7 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
     if (open) {
       fetchClientes();
       fetchProdutos();
+      fetchKits();
     }
   }, [open]);
 
@@ -88,49 +101,98 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
     }
   };
 
+  const fetchKits = async () => {
+    const { data } = await supabase
+      .from('kits_estoque_disponivel')
+      .select('kit_id, codigo, nome, preco_total, estoque_disponivel')
+      .order('nome');
+    if (data) {
+      setKits(data.map(k => ({
+        id: k.kit_id,
+        codigo: k.codigo,
+        nome: k.nome,
+        preco_total: k.preco_total,
+        estoque_disponivel: k.estoque_disponivel
+      })));
+    }
+  };
+
   const addItem = () => {
-    if (!produtoSelecionado || quantidade <= 0) return;
+    if (!itemSelecionado || quantidade <= 0) return;
 
-    const produto = produtos.find(p => p.id === produtoSelecionado);
-    if (!produto) return;
+    if (tipoItem === 'produto') {
+      const produto = produtos.find(p => p.id === itemSelecionado);
+      if (!produto) return;
 
-    if (quantidade > produto.estoque) {
-      toast({
-        title: "Estoque insuficiente",
-        description: `Apenas ${produto.estoque} unidades disponíveis`,
-        variant: "destructive",
-      });
-      return;
+      if (quantidade > produto.estoque) {
+        toast({
+          title: "Estoque insuficiente",
+          description: `Apenas ${produto.estoque} unidades disponíveis`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const itemExistente = itens.find(i => i.produto_id === itemSelecionado);
+      if (itemExistente) {
+        toast({
+          title: "Item já adicionado",
+          description: "Remova o item existente antes de adicionar novamente",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setItens([...itens, {
+        produto_id: produto.id,
+        descricao: produto.descricao || produto.nome,
+        quantidade,
+        preco_unitario: produto.preco,
+        peso: produto.peso,
+        desconto: desconto,
+        tipo: 'produto'
+      }]);
+    } else {
+      const kit = kits.find(k => k.id === itemSelecionado);
+      if (!kit) return;
+
+      if (quantidade > kit.estoque_disponivel) {
+        toast({
+          title: "Estoque insuficiente",
+          description: `Apenas ${kit.estoque_disponivel} kits disponíveis`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const itemExistente = itens.find(i => i.kit_id === itemSelecionado);
+      if (itemExistente) {
+        toast({
+          title: "Kit já adicionado",
+          description: "Remova o item existente antes de adicionar novamente",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setItens([...itens, {
+        kit_id: kit.id,
+        descricao: kit.nome,
+        quantidade,
+        preco_unitario: kit.preco_total,
+        peso: null,
+        desconto: desconto,
+        tipo: 'kit'
+      }]);
     }
 
-    const itemExistente = itens.find(i => i.produto_id === produtoSelecionado);
-    if (itemExistente) {
-      toast({
-        title: "Produto já adicionado",
-        description: "Remova o item existente antes de adicionar novamente",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const precoUnitario = produto.preco;
-
-    setItens([...itens, {
-      produto_id: produto.id,
-      descricao: produto.descricao || produto.nome,
-      quantidade,
-      preco_unitario: precoUnitario,
-      peso: produto.peso,
-      desconto: desconto,
-    }]);
-
-    setProdutoSelecionado("");
+    setItemSelecionado("");
     setQuantidade(1);
     setDesconto(0);
   };
 
-  const removeItem = (produto_id: string) => {
-    setItens(itens.filter(i => i.produto_id !== produto_id));
+  const removeItem = (index: number) => {
+    setItens(itens.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (gerarPDF: boolean = false) => {
@@ -174,7 +236,8 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
         const valorDesconto = subtotal * item.desconto / 100;
         return {
           orcamento_id: orcamento.id,
-          produto_id: item.produto_id,
+          produto_id: item.produto_id || null,
+          kit_id: item.kit_id || null,
           quantidade: item.quantidade,
           preco_unitario: item.preco_unitario,
           desconto: item.desconto,
@@ -314,23 +377,54 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
           </div>
 
           <div className="border border-border rounded-lg p-4 space-y-4">
-            <h3 className="font-semibold">Adicionar Produtos</h3>
-            
-            <div className="grid gap-4 md:grid-cols-4">
-              <div className="md:col-span-2 space-y-2">
-                <Label>Produto</Label>
-                <Select value={produtoSelecionado} onValueChange={setProdutoSelecionado}>
+            <h3 className="font-semibold">Adicionar Itens ao Orçamento</h3>
+
+            <div className="grid gap-4 md:grid-cols-5">
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select value={tipoItem} onValueChange={(value: 'produto' | 'kit') => {
+                  setTipoItem(value);
+                  setItemSelecionado("");
+                }}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione um produto" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {produtos.map(produto => (
-                      <SelectItem key={produto.id} value={produto.id}>
-                        {produto.nome || produto.descricao} - R$ {produto.preco.toFixed(2)} (Estoque: {produto.estoque})
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="produto">Produto</SelectItem>
+                    <SelectItem value="kit">Kit</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="md:col-span-2 space-y-2">
+                <Label>{tipoItem === 'produto' ? 'Produto' : 'Kit'}</Label>
+                {tipoItem === 'produto' ? (
+                  <Select value={itemSelecionado} onValueChange={setItemSelecionado}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um produto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {produtos.map(produto => (
+                        <SelectItem key={produto.id} value={produto.id}>
+                          {produto.nome || produto.descricao} - R$ {produto.preco.toFixed(2)} (Estoque: {produto.estoque})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={itemSelecionado} onValueChange={setItemSelecionado}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um kit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {kits.map(kit => (
+                        <SelectItem key={kit.id} value={kit.id}>
+                          {kit.nome} - R$ {kit.preco_total.toFixed(2)} (Disponível: {kit.estoque_disponivel})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -425,7 +519,7 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
                         <Button
                           size="icon"
                           variant="destructive"
-                          onClick={() => removeItem(item.produto_id)}
+                          onClick={() => removeItem(index)}
                           className="h-8 w-8"
                         >
                           <Trash2 className="h-4 w-4" />
