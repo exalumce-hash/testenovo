@@ -29,7 +29,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const adminMenuItems = [
+const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Produtos", url: "/produtos", icon: Package },
   { title: "Kits", url: "/kits", icon: Boxes },
@@ -43,17 +43,9 @@ const adminMenuItems = [
   { title: "Relatórios", url: "/relatorios", icon: BarChart3 },
 ];
 
-const clientMenuItems = [
-  { title: "Catálogo", url: "/catalogo", icon: Store },
-  { title: "Carrinho", url: "/carrinho", icon: ShoppingCart },
-  { title: "Meus Pedidos", url: "/meus-pedidos", icon: History },
-];
-
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { isAdmin } = useAuth();
   const collapsed = state === "collapsed";
-  const menuItems = isAdmin ? adminMenuItems : clientMenuItems;
 
   return (
     <Sidebar collapsible="icon">
@@ -79,7 +71,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs font-bold uppercase tracking-wider px-2">
-            {isAdmin ? 'Administração' : 'Menu Cliente'}
+            Administração
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -105,29 +97,27 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to="/configuracoes"
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-gradient-to-r from-primary/20 to-accent/20 text-sidebar-foreground font-semibold border-l-4 border-primary shadow-sm"
-                          : "hover:bg-sidebar-accent/70 hover:translate-x-1 transition-all duration-200"
-                      }
-                    >
-                      <Settings className="h-4 w-4" />
-                      {!collapsed && <span>Configurações</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink
+                    to="/configuracoes"
+                    className={({ isActive }) =>
+                      isActive
+                        ? "bg-gradient-to-r from-primary/20 to-accent/20 text-sidebar-foreground font-semibold border-l-4 border-primary shadow-sm"
+                        : "hover:bg-sidebar-accent/70 hover:translate-x-1 transition-all duration-200"
+                    }
+                  >
+                    <Settings className="h-4 w-4" />
+                    {!collapsed && <span>Configurações</span>}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );

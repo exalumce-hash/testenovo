@@ -66,9 +66,6 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/catalogo" element={<CatalogoCliente />} />
-          <Route path="/catalogo-publico" element={<CatalogoPublico />} />
-          <Route path="/carrinho" element={<Carrinho />} />
           <Route path="/" element={<RootRedirect />} />
           <Route
             path="/dashboard"
@@ -186,16 +183,6 @@ const App = () => (
               <ProtectedRoute>
                 <AppLayout>
                   <Configuracoes />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/meus-pedidos"
-            element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <MeusPedidos />
                 </AppLayout>
               </ProtectedRoute>
             }
