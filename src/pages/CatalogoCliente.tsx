@@ -4,40 +4,62 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Package, ShoppingCart } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Search, Package, ShoppingCart, Plus, Minus, Trash2, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Product {
   id: string;
   codigo: string;
-  descricao: string;
-  tipo: string | null;
-  cor: string | null;
-  preco_venda: number;
+  nome: string;
+  descricao: string | null;
+  categoria: string | null;
+  preco: number;
   peso: number | null;
-  foto_url: string | null;
-  estoque: Array<{ quantidade: number }>;
+  imagem_url: string | null;
+  estoque: number;
+}
+
+interface Kit {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao: string | null;
+  preco_total: number;
+  estoque_disponivel: number;
 }
 
 interface CartItem {
-  produto_id: string;
-  descricao: string;
+  id: string;
+  tipo: 'produto' | 'kit';
+  nome: string;
   quantidade: number;
   preco_unitario: number;
-  peso?: number;
+  subtotal: number;
 }
 
 export default function CatalogoCliente() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
+  const [kits, setKits] = useState<Kit[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCart, setShowCart] = useState(false);
+  const [observacoes, setObservacoes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchProducts();
+    fetchKits();
     loadCart();
   }, []);
 
@@ -45,20 +67,42 @@ export default function CatalogoCliente() {
     try {
       const { data, error } = await supabase
         .from('produtos')
-        .select('id, codigo, descricao, tipo, cor, preco_venda, peso, foto_url, estoque(quantidade)')
-        .order('descricao', { ascending: true });
+        .select('id, codigo, nome, descricao, categoria, preco, peso, imagem_url, estoque')
+        .eq('ativo', true)
+        .gt('estoque', 0)
+        .order('nome', { ascending: true });
 
       if (error) throw error;
-      
-      const productsWithEstoque = (data || []).map(p => ({
-        ...p,
-        estoque: Array.isArray(p.estoque) ? p.estoque : [p.estoque]
-      }));
-      
-      setProducts(productsWithEstoque as Product[]);
+      setProducts(data || []);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar produtos",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchKits = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('kits_estoque_disponivel')
+        .select('kit_id, codigo, nome, descricao, preco_total, estoque_disponivel')
+        .gt('estoque_disponivel', 0)
+        .order('nome');
+
+      if (error) throw error;
+      setKits(data?.map(k => ({
+        id: k.kit_id,
+        codigo: k.codigo,
+        nome: k.nome,
+        descricao: k.descricao,
+        preco_total: k.preco_total,
+        estoque_disponivel: k.estoque_disponivel
+      })) || []);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao carregar kits",
         description: error.message,
         variant: "destructive",
       });
@@ -68,7 +112,7 @@ export default function CatalogoCliente() {
   };
 
   const loadCart = () => {
-    const savedCart = localStorage.getItem('cart');
+    const savedCart = localStorage.getItem('cart_cliente');
     if (savedCart) {
       setCart(JSON.parse(savedCart));
     }
@@ -76,187 +120,395 @@ export default function CatalogoCliente() {
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
-    localStorage.setItem('cart', JSON.stringify(newCart));
+    localStorage.setItem('cart_cliente', JSON.stringify(newCart));
   };
 
-  const addToCart = (product: Product) => {
-    const estoque = product.estoque[0]?.quantidade || 0;
-    if (estoque <= 0) {
+  const addToCart = (item: Product | Kit, tipo: 'produto' | 'kit') => {
+    const existingItem = cart.find(i => i.id === item.id && i.tipo === tipo);
+
+    if (existingItem) {
+      const newCart = cart.map(i =>
+        i.id === item.id && i.tipo === tipo
+          ? { ...i, quantidade: i.quantidade + 1, subtotal: (i.quantidade + 1) * i.preco_unitario }
+          : i
+      );
+      saveCart(newCart);
+    } else {
+      const preco = tipo === 'produto' ? (item as Product).preco : (item as Kit).preco_total;
+      const newItem: CartItem = {
+        id: item.id,
+        tipo,
+        nome: item.nome,
+        quantidade: 1,
+        preco_unitario: preco,
+        subtotal: preco
+      };
+      saveCart([...cart, newItem]);
+    }
+
+    toast({
+      title: "Adicionado ao carrinho",
+      description: `${item.nome} foi adicionado ao carrinho`,
+    });
+  };
+
+  const updateQuantity = (index: number, delta: number) => {
+    const newCart = cart.map((item, i) => {
+      if (i === index) {
+        const novaQuantidade = Math.max(1, item.quantidade + delta);
+        return {
+          ...item,
+          quantidade: novaQuantidade,
+          subtotal: novaQuantidade * item.preco_unitario
+        };
+      }
+      return item;
+    });
+    saveCart(newCart);
+  };
+
+  const removeFromCart = (index: number) => {
+    const newCart = cart.filter((_, i) => i !== index);
+    saveCart(newCart);
+  };
+
+  const finalizarPedido = async () => {
+    if (cart.length === 0) {
       toast({
-        title: "Produto sem estoque",
-        description: "Este produto não está disponível no momento",
+        title: "Carrinho vazio",
+        description: "Adicione itens ao carrinho antes de finalizar o pedido",
         variant: "destructive",
       });
       return;
     }
 
-    const existingItem = cart.find(item => item.produto_id === product.id);
-    let newCart: CartItem[];
+    if (!user) {
+      toast({
+        title: "Não autenticado",
+        description: "Você precisa estar logado para fazer um pedido",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (existingItem) {
-      if (existingItem.quantidade >= estoque) {
+    setSubmitting(true);
+
+    try {
+      // Preparar itens do pedido
+      const itensJson = cart.map(item => ({
+        produto_id: item.tipo === 'produto' ? item.id : null,
+        kit_id: item.tipo === 'kit' ? item.id : null,
+        quantidade: item.quantidade,
+        preco_unitario: item.preco_unitario
+      }));
+
+      // Chamar função para criar pedido
+      const { data, error } = await supabase.rpc('criar_pedido_catalogo', {
+        cliente_id_param: user.id,
+        itens_json: itensJson,
+        observacoes_param: observacoes || null
+      });
+
+      if (error) throw error;
+
+      if (data && !data.success) {
         toast({
-          title: "Quantidade máxima",
-          description: `Só temos ${estoque} unidades disponíveis`,
+          title: "Erro ao criar pedido",
+          description: data.message,
           variant: "destructive",
         });
         return;
       }
-      newCart = cart.map(item =>
-        item.produto_id === product.id
-          ? { ...item, quantidade: item.quantidade + 1 }
-          : item
-      );
-    } else {
-      newCart = [...cart, {
-        produto_id: product.id,
-        descricao: product.descricao,
-        quantidade: 1,
-        preco_unitario: product.preco_venda,
-        peso: product.peso || 0,
-      }];
-    }
 
-    saveCart(newCart);
-    toast({
-      title: "Produto adicionado",
-      description: `${product.descricao} foi adicionado ao carrinho`,
-    });
+      toast({
+        title: "Pedido criado!",
+        description: data.message || "Seu pedido foi enviado e está aguardando aprovação",
+      });
+
+      // Limpar carrinho
+      saveCart([]);
+      setObservacoes("");
+      setShowCart(false);
+
+      // Recarregar produtos para atualizar estoque
+      fetchProducts();
+      fetchKits();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao finalizar pedido",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const filteredProducts = products.filter((product) =>
-    product.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+  const totalCarrinho = cart.reduce((sum, item) => sum + item.subtotal, 0);
+
+  const filteredProducts = products.filter(p =>
+    p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.codigo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const cartTotal = cart.reduce((sum, item) => sum + (item.quantidade * item.preco_unitario), 0);
-  const cartItems = cart.reduce((sum, item) => sum + item.quantidade, 0);
-
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="text-center py-8 text-muted-foreground">
-          Carregando catálogo...
-        </div>
-      </div>
-    );
-  }
+  const filteredKits = kits.filter(k =>
+    k.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    k.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 animate-fade-in">
-      <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-border/50 shadow-sm">
-        <div className="container mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="space-y-1">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Catálogo de Produtos</h2>
-              <p className="text-muted-foreground">Descubra nossas melhores ofertas</p>
-            </div>
-            {cartItems > 0 && (
-              <Button onClick={() => navigate('/carrinho')} size="lg" className="bg-gradient-to-r from-primary to-accent hover:shadow-lg hover:scale-105 transition-all duration-200 relative">
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                <span className="hidden sm:inline">Carrinho</span> ({cartItems})
-                <span className="hidden md:inline ml-2">- R$ {cartTotal.toFixed(2)}</span>
-                <span className="absolute -top-2 -right-2 h-6 w-6 bg-destructive text-white rounded-full flex items-center justify-center text-xs font-bold animate-pulse">{cartItems}</span>
-              </Button>
-            )}
-          </div>
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-foreground">Catálogo de Produtos</h2>
+          <p className="text-muted-foreground">Navegue e adicione produtos ao carrinho</p>
         </div>
+        <Button
+          size="lg"
+          onClick={() => setShowCart(true)}
+          className="relative"
+        >
+          <ShoppingCart className="h-5 w-5 mr-2" />
+          Carrinho
+          {cart.length > 0 && (
+            <Badge className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0 flex items-center justify-center">
+              {cart.length}
+            </Badge>
+          )}
+        </Button>
       </div>
 
-      <div className="container mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <div className="relative max-w-2xl mx-auto">
-            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+      <Card>
+        <CardHeader>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Buscar produtos por nome ou código..."
+              placeholder="Buscar produtos ou kits..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-12 h-14 border-2 border-border/50 focus:border-primary focus:ring-4 focus:ring-primary/10 rounded-xl text-lg shadow-sm"
+              className="pl-10"
             />
           </div>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredProducts.map((product) => {
-              const estoque = product.estoque[0]?.quantidade || 0;
-              const inCart = cart.find(item => item.produto_id === product.id);
-
-              return (
-                <Card key={product.id} className="group overflow-hidden border-0 shadow-lg hover-lift bg-white">
-                  <div className="aspect-square bg-gradient-to-br from-slate-100 to-blue-50 flex items-center justify-center relative overflow-hidden">
-                    {product.foto_url ? (
-                      <img
-                        src={product.foto_url}
-                        alt={product.descricao}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                    ) : (
-                      <Package className="h-20 w-20 text-primary/20" />
-                    )}
-                    {estoque > 0 && (
-                      <Badge className="absolute top-3 right-3 bg-success shadow-lg">
-                        {estoque} disponível
-                      </Badge>
-                    )}
-                    {estoque === 0 && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <Badge variant="destructive" className="text-lg px-4 py-2">Sem Estoque</Badge>
-                      </div>
-                    )}
-                  </div>
-                  <CardContent className="p-5 space-y-3">
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Cód: {product.codigo}</p>
-                      <h3 className="font-bold text-foreground text-lg line-clamp-2 min-h-[3.5rem]">{product.descricao}</h3>
-                    </div>
-                    
-                    <div className="flex gap-2 flex-wrap">
-                      {product.tipo && (
-                        <Badge className="bg-gradient-to-r from-primary/10 to-accent/10 text-primary border-0">{product.tipo}</Badge>
-                      )}
-                      {product.cor && (
-                        <Badge variant="outline" className="border-primary/30 text-primary">{product.cor}</Badge>
-                      )}
-                    </div>
-
-                    <div className="border-t border-border/50 pt-3 mt-2">
-                      <div className="flex items-end justify-between mb-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Preço por kg</p>
-                          <p className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                            R$ {product.preco_venda.toFixed(2)}
-                          </p>
-                          {product.peso && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {product.peso} kg por unidade
-                            </p>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Carregando produtos...</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {/* PRODUTOS */}
+              {filteredProducts.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Produtos
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredProducts.map((product) => (
+                      <Card key={product.id} className="hover:shadow-lg transition-shadow">
+                        <CardContent className="p-4">
+                          {product.imagem_url && (
+                            <img
+                              src={product.imagem_url}
+                              alt={product.nome}
+                              className="w-full h-48 object-cover rounded-lg mb-4"
+                            />
                           )}
+                          <div className="space-y-2">
+                            <div>
+                              <h4 className="font-semibold">{product.nome}</h4>
+                              <p className="text-sm text-muted-foreground">{product.codigo}</p>
+                            </div>
+                            {product.descricao && (
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {product.descricao}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-2xl font-bold text-primary">
+                                R$ {product.preco.toFixed(2)}
+                              </span>
+                              <Badge variant="outline">
+                                Estoque: {product.estoque}
+                              </Badge>
+                            </div>
+                            <Button
+                              className="w-full"
+                              onClick={() => addToCart(product, 'produto')}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Adicionar
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* KITS */}
+              {filteredKits.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Kits
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredKits.map((kit) => (
+                      <Card key={kit.id} className="hover:shadow-lg transition-shadow border-primary/20">
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div>
+                              <Badge variant="secondary" className="mb-2">KIT</Badge>
+                              <h4 className="font-semibold">{kit.nome}</h4>
+                              <p className="text-sm text-muted-foreground">{kit.codigo}</p>
+                            </div>
+                            {kit.descricao && (
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {kit.descricao}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-2xl font-bold text-primary">
+                                R$ {kit.preco_total.toFixed(2)}
+                              </span>
+                              <Badge variant="outline">
+                                Disponível: {kit.estoque_disponivel}
+                              </Badge>
+                            </div>
+                            <Button
+                              className="w-full"
+                              onClick={() => addToCart(kit, 'kit')}
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Adicionar
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {filteredProducts.length === 0 && filteredKits.length === 0 && (
+                <div className="text-center py-12">
+                  <Package className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Nenhum produto ou kit encontrado</p>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* DIALOG CARRINHO */}
+      <Dialog open={showCart} onOpenChange={setShowCart}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Carrinho de Compras</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {cart.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">Seu carrinho está vazio</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {cart.map((item, index) => (
+                    <Card key={index}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold">{item.nome}</h4>
+                              {item.tipo === 'kit' && (
+                                <Badge variant="secondary" className="text-xs">KIT</Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              R$ {item.preco_unitario.toFixed(2)} cada
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => updateQuantity(index, -1)}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                              <span className="font-semibold w-8 text-center">
+                                {item.quantidade}
+                              </span>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => updateQuantity(index, 1)}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <div className="w-24 text-right">
+                              <p className="font-bold">R$ {item.subtotal.toFixed(2)}</p>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="destructive"
+                              onClick={() => removeFromCart(index)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
 
-                      <Button
-                        onClick={() => addToCart(product)}
-                        disabled={estoque <= 0}
-                        className="w-full h-12 bg-gradient-to-r from-primary to-accent hover:shadow-xl hover:scale-105 transition-all duration-200 text-base font-semibold"
-                      >
-                        <ShoppingCart className="h-5 w-5 mr-2" />
-                        {inCart ? `No carrinho (${inCart.quantidade})` : 'Adicionar ao Carrinho'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-        </div>
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Observações (opcional)
+                    </label>
+                    <Textarea
+                      placeholder="Informações adicionais sobre o pedido..."
+                      value={observacoes}
+                      onChange={(e) => setObservacoes(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
 
-        {filteredProducts.length === 0 && (
-          <div className="text-center py-16">
-            <Package className="h-24 w-24 mx-auto mb-4 text-muted-foreground/20" />
-            <h3 className="text-xl font-semibold mb-2">Nenhum produto encontrado</h3>
-            <p className="text-muted-foreground">Tente ajustar sua busca</p>
+                  <div className="flex items-center justify-between text-xl font-bold">
+                    <span>Total:</span>
+                    <span className="text-primary">R$ {totalCarrinho.toFixed(2)}</span>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={finalizarPedido}
+                    disabled={submitting}
+                  >
+                    <Send className="h-5 w-5 mr-2" />
+                    {submitting ? "Enviando..." : "Finalizar Pedido"}
+                  </Button>
+
+                  <p className="text-xs text-center text-muted-foreground">
+                    Seu pedido será enviado para aprovação do administrador
+                  </p>
+                </div>
+              </>
+            )}
           </div>
-        )}
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

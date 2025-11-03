@@ -12,16 +12,18 @@ import { toast } from "@/hooks/use-toast";
 interface Product {
   id: string;
   codigo: string;
-  descricao: string;
-  tipo: string | null;
-  cor: string | null;
-  liga: string | null;
+  nome: string;
+  descricao: string | null;
+  categoria: string | null;
   peso: number | null;
-  unidade: string;
-  preco_custo: number | null;
-  preco_venda: number;
+  unidade: string | null;
+  custo: number | null;
+  preco: number | null;
   preco_por_kg: number | null;
-  foto_url: string | null;
+  imagem_url: string | null;
+  estoque: number | null;
+  estoque_minimo: number | null;
+  ativo: boolean | null;
 }
 
 interface EditProductDialogProps {
@@ -34,37 +36,37 @@ interface EditProductDialogProps {
 export default function EditProductDialog({ product, open, onOpenChange, onProductUpdated }: EditProductDialogProps) {
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(product.foto_url);
-  
+  const [imagePreview, setImagePreview] = useState<string | null>(product.imagem_url);
+
   const [formData, setFormData] = useState({
     codigo: product.codigo,
-    descricao: product.descricao,
-    tipo: product.tipo || "",
-    cor: product.cor || "",
-    liga: product.liga || "",
+    nome: product.nome || "",
+    descricao: product.descricao || "",
+    categoria: product.categoria || "",
     peso: product.peso?.toString() || "",
-    unidade: product.unidade,
-    preco_custo: product.preco_custo?.toString() || "",
-    preco_venda: product.preco_venda.toString(),
+    unidade: product.unidade || "UN",
+    custo: product.custo?.toString() || "",
+    preco: product.preco?.toString() || "",
     preco_por_kg: product.preco_por_kg?.toString() || "",
-    localizacao: product.localizacao || "",
+    estoque: product.estoque?.toString() || "0",
+    estoque_minimo: product.estoque_minimo?.toString() || "0",
   });
 
   useEffect(() => {
     setFormData({
       codigo: product.codigo,
-      descricao: product.descricao,
-      tipo: product.tipo || "",
-      cor: product.cor || "",
-      liga: product.liga || "",
+      nome: product.nome || "",
+      descricao: product.descricao || "",
+      categoria: product.categoria || "",
       peso: product.peso?.toString() || "",
-      unidade: product.unidade,
-      preco_custo: product.preco_custo?.toString() || "",
-      preco_venda: product.preco_venda.toString(),
+      unidade: product.unidade || "UN",
+      custo: product.custo?.toString() || "",
+      preco: product.preco?.toString() || "",
       preco_por_kg: product.preco_por_kg?.toString() || "",
-      localizacao: product.localizacao || "",
+      estoque: product.estoque?.toString() || "0",
+      estoque_minimo: product.estoque_minimo?.toString() || "0",
     });
-    setImagePreview(product.foto_url);
+    setImagePreview(product.imagem_url);
   }, [product]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,11 +88,11 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.preco_venda || isNaN(parseFloat(formData.preco_venda))) {
+
+    if (!formData.preco || isNaN(parseFloat(formData.preco))) {
       toast({
         title: "Erro de validação",
-        description: "Preço de venda é obrigatório e deve ser um número válido.",
+        description: "Preço é obrigatório e deve ser um número válido.",
         variant: "destructive",
       });
       return;
@@ -101,17 +103,17 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
     try {
       const { error } = await supabase.from('produtos').update({
         codigo: formData.codigo,
-        descricao: formData.descricao,
-        tipo: formData.tipo || null,
-        cor: formData.cor || null,
-        liga: formData.liga || null,
+        nome: formData.nome,
+        descricao: formData.descricao || null,
+        categoria: formData.categoria || null,
         peso: formData.peso && !isNaN(parseFloat(formData.peso)) ? parseFloat(formData.peso) : null,
-        localizacao: formData.localizacao || null,
-        unidade: formData.unidade,
-        preco_custo: formData.preco_custo && !isNaN(parseFloat(formData.preco_custo)) ? parseFloat(formData.preco_custo) : null,
-        preco_venda: parseFloat(formData.preco_venda),
+        unidade: formData.unidade || 'UN',
+        custo: formData.custo && !isNaN(parseFloat(formData.custo)) ? parseFloat(formData.custo) : null,
+        preco: parseFloat(formData.preco),
         preco_por_kg: formData.preco_por_kg && !isNaN(parseFloat(formData.preco_por_kg)) ? parseFloat(formData.preco_por_kg) : null,
-        foto_url: imagePreview || null,
+        estoque: formData.estoque && !isNaN(parseInt(formData.estoque)) ? parseInt(formData.estoque) : 0,
+        estoque_minimo: formData.estoque_minimo && !isNaN(parseInt(formData.estoque_minimo)) ? parseInt(formData.estoque_minimo) : 0,
+        imagem_url: imagePreview || null,
       }).eq('id', product.id);
 
       if (error) throw error;
@@ -189,20 +191,20 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="unidade">Unidade</Label>
+              <Label htmlFor="nome">Nome *</Label>
               <Input
-                id="unidade"
-                value={formData.unidade}
-                onChange={(e) => setFormData({ ...formData, unidade: e.target.value })}
+                id="nome"
+                required
+                value={formData.nome}
+                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="descricao">Descrição *</Label>
+            <Label htmlFor="descricao">Descrição</Label>
             <Textarea
               id="descricao"
-              required
               value={formData.descricao}
               onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
             />
@@ -210,32 +212,25 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="tipo">Tipo</Label>
+              <Label htmlFor="categoria">Categoria</Label>
               <Input
-                id="tipo"
-                value={formData.tipo}
-                onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                id="categoria"
+                value={formData.categoria}
+                onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cor">Cor</Label>
+              <Label htmlFor="unidade">Unidade</Label>
               <Input
-                id="cor"
-                value={formData.cor}
-                onChange={(e) => setFormData({ ...formData, cor: e.target.value })}
+                id="unidade"
+                value={formData.unidade}
+                onChange={(e) => setFormData({ ...formData, unidade: e.target.value })}
+                placeholder="UN, KG, M"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="liga">Liga</Label>
-              <Input
-                id="liga"
-                value={formData.liga}
-                onChange={(e) => setFormData({ ...formData, liga: e.target.value })}
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="peso">Peso por Unidade (kg)</Label>
               <Input
@@ -248,57 +243,71 @@ export default function EditProductDialog({ product, open, onOpenChange, onProdu
                 placeholder="0.000"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="preco_por_kg">Preço por Kg</Label>
+              <Input
+                id="preco_por_kg"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.preco_por_kg}
+                onChange={(e) => setFormData({ ...formData, preco_por_kg: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="preco_custo">Preço de Custo</Label>
+              <Label htmlFor="custo">Preço de Custo</Label>
               <Input
-                id="preco_custo"
+                id="custo"
                 type="number"
                 step="0.01"
                 min="0"
-                value={formData.preco_custo}
-                onChange={(e) => setFormData({ ...formData, preco_custo: e.target.value })}
+                value={formData.custo}
+                onChange={(e) => setFormData({ ...formData, custo: e.target.value })}
                 placeholder="0.00"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="preco_venda">Preço de Venda *</Label>
+              <Label htmlFor="preco">Preço de Venda *</Label>
               <Input
-                id="preco_venda"
+                id="preco"
                 type="number"
                 step="0.01"
                 min="0"
                 required
-                value={formData.preco_venda}
-                onChange={(e) => setFormData({ ...formData, preco_venda: e.target.value })}
+                value={formData.preco}
+                onChange={(e) => setFormData({ ...formData, preco: e.target.value })}
                 placeholder="0.00"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="preco_por_kg">Preço por Kg</Label>
-            <Input
-              id="preco_por_kg"
-              type="number"
-              step="0.01"
-              min="0"
-              value={formData.preco_por_kg}
-              onChange={(e) => setFormData({ ...formData, preco_por_kg: e.target.value })}
-              placeholder="0.00"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="localizacao">Localização no Galpão</Label>
-            <Input
-              id="localizacao"
-              value={formData.localizacao}
-              onChange={(e) => setFormData({ ...formData, localizacao: e.target.value })}
-              placeholder="Ex: Prateleira A3, Setor 2"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="estoque">Estoque</Label>
+              <Input
+                id="estoque"
+                type="number"
+                min="0"
+                value={formData.estoque}
+                onChange={(e) => setFormData({ ...formData, estoque: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="estoque_minimo">Estoque Mínimo</Label>
+              <Input
+                id="estoque_minimo"
+                type="number"
+                min="0"
+                value={formData.estoque_minimo}
+                onChange={(e) => setFormData({ ...formData, estoque_minimo: e.target.value })}
+                placeholder="0"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">
