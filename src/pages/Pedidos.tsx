@@ -281,44 +281,100 @@ export default function Pedidos() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {pedido.status === 'pendente' && pedido.origem === 'catalogo' && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={async () => {
-                                try {
-                                  const { data, error } = await supabase.rpc('aprovar_pedido_catalogo', {
-                                    pedido_id_param: pedido.id
-                                  });
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={async () => {
+                                  try {
+                                    const { data, error } = await supabase.rpc('aprovar_pedido_catalogo', {
+                                      pedido_id_param: pedido.id
+                                    });
 
-                                  if (error) throw error;
+                                    if (error) throw error;
 
-                                  if (data && !data.success) {
+                                    if (data && !data.success) {
+                                      toast({
+                                        title: "Erro",
+                                        description: data.message,
+                                        variant: "destructive",
+                                      });
+                                      return;
+                                    }
+
                                     toast({
-                                      title: "Erro",
-                                      description: data.message,
+                                      title: "Pedido aprovado!",
+                                      description: data.message || "Estoque debitado com sucesso",
+                                    });
+
+                                    fetchPedidos();
+                                  } catch (error: any) {
+                                    toast({
+                                      title: "Erro ao aprovar",
+                                      description: error.message,
                                       variant: "destructive",
                                     });
-                                    return;
                                   }
+                                }}
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Aprovar
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="destructive">
+                                    <XCircle className="h-4 w-4 mr-1" />
+                                    Rejeitar
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Rejeitar pedido?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja rejeitar este pedido? Esta ação não pode ser desfeita.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={async () => {
+                                        try {
+                                          const { data, error } = await supabase.rpc('rejeitar_pedido_catalogo', {
+                                            pedido_id_param: pedido.id
+                                          });
 
-                                  toast({
-                                    title: "Pedido aprovado!",
-                                    description: data.message || "Estoque debitado com sucesso",
-                                  });
+                                          if (error) throw error;
 
-                                  fetchPedidos();
-                                } catch (error: any) {
-                                  toast({
-                                    title: "Erro ao aprovar",
-                                    description: error.message,
-                                    variant: "destructive",
-                                  });
-                                }
-                              }}
-                            >
-                              <Check className="h-4 w-4 mr-1" />
-                              Aprovar
-                            </Button>
+                                          if (data && !data.success) {
+                                            toast({
+                                              title: "Erro",
+                                              description: data.message,
+                                              variant: "destructive",
+                                            });
+                                            return;
+                                          }
+
+                                          toast({
+                                            title: "Pedido rejeitado",
+                                            description: "Pedido foi rejeitado com sucesso",
+                                          });
+
+                                          fetchPedidos();
+                                        } catch (error: any) {
+                                          toast({
+                                            title: "Erro ao rejeitar",
+                                            description: error.message,
+                                            variant: "destructive",
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      Confirmar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
                           )}
                           <Dialog>
                             <DialogTrigger asChild>

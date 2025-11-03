@@ -159,18 +159,16 @@ export default function Orcamentos() {
   const handleStatusChange = async (orcamentoId: string, newStatus: string) => {
     try {
       if (newStatus === 'aprovado') {
-        // Chamar função para processar orçamento e debitar do estoque
-        const { data, error } = await supabase.rpc('processar_orcamento_aprovado', {
+        const { data, error } = await supabase.rpc('aprovar_orcamento_simples', {
           orcamento_id_param: orcamentoId
         });
 
         if (error) throw error;
 
-        // A função retorna JSON, verificar se existe e se tem success
         if (data && !data.success) {
           toast({
             title: "Erro ao aprovar orçamento",
-            description: data.message || "Não foi possível processar o orçamento",
+            description: data.message || "Não foi possível aprovar o orçamento",
             variant: "destructive",
           });
           return;
@@ -178,10 +176,29 @@ export default function Orcamentos() {
 
         toast({
           title: "Orçamento aprovado!",
-          description: data?.message || "Orçamento aprovado e estoque debitado com sucesso",
+          description: "Orçamento aprovado com sucesso",
+        });
+      } else if (newStatus === 'rejeitado') {
+        const { data, error } = await supabase.rpc('rejeitar_orcamento', {
+          orcamento_id_param: orcamentoId
+        });
+
+        if (error) throw error;
+
+        if (data && !data.success) {
+          toast({
+            title: "Erro ao rejeitar orçamento",
+            description: data.message || "Não foi possível rejeitar o orçamento",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        toast({
+          title: "Orçamento rejeitado",
+          description: "Orçamento rejeitado com sucesso",
         });
       } else {
-        // Para outros status, apenas atualizar
         const { error } = await supabase
           .from('orcamentos')
           .update({ status: newStatus })
