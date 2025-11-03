@@ -166,10 +166,11 @@ export default function Orcamentos() {
 
         if (error) throw error;
 
-        if (!data.success) {
+        // A função retorna JSON, verificar se existe e se tem success
+        if (data && !data.success) {
           toast({
-            title: "Estoque insuficiente",
-            description: data.message,
+            title: "Erro ao aprovar orçamento",
+            description: data.message || "Não foi possível processar o orçamento",
             variant: "destructive",
           });
           return;
@@ -177,7 +178,7 @@ export default function Orcamentos() {
 
         toast({
           title: "Orçamento aprovado!",
-          description: data.message,
+          description: data?.message || "Orçamento aprovado e estoque debitado com sucesso",
         });
       } else {
         // Para outros status, apenas atualizar

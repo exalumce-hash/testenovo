@@ -365,23 +365,68 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
               <div className="space-y-2">
                 <h4 className="font-medium">Itens do Orçamento:</h4>
                 <div className="space-y-2">
-                  {itens.map((item) => (
-                    <div key={item.produto_id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div className="flex-1">
+                  {itens.map((item, index) => (
+                    <div key={item.produto_id} className="grid grid-cols-12 gap-2 items-center p-3 bg-secondary rounded-lg">
+                      <div className="col-span-4">
                         <p className="font-medium">{item.descricao}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {item.quantidade} x R$ {item.preco_unitario.toFixed(2)}
-                          {item.desconto > 0 && ` - ${item.desconto}% desc.`}
-                        </p>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="col-span-2">
+                        <Label className="text-xs">Quantidade</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantidade}
+                          onChange={(e) => {
+                            const newItens = [...itens];
+                            newItens[index].quantidade = parseInt(e.target.value) || 1;
+                            setItens(newItens);
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Preço Unit.</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.preco_unitario}
+                          onChange={(e) => {
+                            const newItens = [...itens];
+                            newItens[index].preco_unitario = parseFloat(e.target.value) || 0;
+                            setItens(newItens);
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs">Desc. (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={item.desconto}
+                          onChange={(e) => {
+                            const newItens = [...itens];
+                            newItens[index].desconto = parseFloat(e.target.value) || 0;
+                            setItens(newItens);
+                          }}
+                          className="h-8"
+                        />
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <p className="text-xs text-muted-foreground">Subtotal</p>
                         <p className="font-semibold">
                           R$ {((item.quantidade * item.preco_unitario) - ((item.quantidade * item.preco_unitario) * item.desconto / 100)).toFixed(2)}
                         </p>
+                      </div>
+                      <div className="col-span-1 flex justify-end">
                         <Button
                           size="icon"
                           variant="destructive"
                           onClick={() => removeItem(item.produto_id)}
+                          className="h-8 w-8"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
