@@ -336,7 +336,7 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
     setClienteId("");
     setObservacoes("");
     setItens([]);
-    setProdutoSelecionado("");
+    setItemSelecionado("");
     setQuantidade(1);
     setDesconto(0);
   };
