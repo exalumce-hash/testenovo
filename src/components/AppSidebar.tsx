@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Store,
   History,
+  Boxes,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -29,8 +30,9 @@ import {
 } from "@/components/ui/sidebar";
 
 const adminMenuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Produtos", url: "/produtos", icon: Package },
+  { title: "Kits", url: "/kits", icon: Boxes },
   { title: "Estoque", url: "/estoque", icon: Warehouse },
   { title: "Clientes", url: "/clientes", icon: Users },
   { title: "Orçamentos", url: "/orcamentos", icon: FileText },

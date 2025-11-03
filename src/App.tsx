@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Produtos from "./pages/Produtos";
+import Kits from "./pages/Kits";
 import Estoque from "./pages/Estoque";
 import Clientes from "./pages/Clientes";
 import Orcamentos from "./pages/Orcamentos";
@@ -43,6 +44,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RootRedirect() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return <Navigate to={user ? "/dashboard" : "/auth"} replace />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -54,7 +69,7 @@ const App = () => (
           <Route path="/catalogo" element={<CatalogoCliente />} />
           <Route path="/catalogo-publico" element={<CatalogoPublico />} />
           <Route path="/carrinho" element={<Carrinho />} />
-          <Route path="/" element={<CatalogoPublico />} />
+          <Route path="/" element={<RootRedirect />} />
           <Route
             path="/dashboard"
             element={
@@ -71,6 +86,16 @@ const App = () => (
               <ProtectedRoute>
                 <AppLayout>
                   <Produtos />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/kits"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Kits />
                 </AppLayout>
               </ProtectedRoute>
             }

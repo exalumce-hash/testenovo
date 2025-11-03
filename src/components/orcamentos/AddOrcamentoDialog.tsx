@@ -35,9 +35,10 @@ interface Cliente {
 interface Produto {
   id: string;
   descricao: string;
-  preco_venda: number;
+  nome: string;
+  preco: number;
   peso: number | null;
-  estoque: Array<{ quantidade: number }>;
+  estoque: number;
 }
 
 interface ItemOrcamento {
@@ -46,6 +47,7 @@ interface ItemOrcamento {
   quantidade: number;
   preco_unitario: number;
   peso: number | null;
+  desconto: number;
 }
 
 export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAdded: () => void }) {
@@ -58,6 +60,7 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState("");
   const [quantidade, setQuantidade] = useState(1);
+  const [desconto, setDesconto] = useState(0);
 
   useEffect(() => {
     if (open) {
@@ -77,14 +80,11 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
   const fetchProdutos = async () => {
     const { data } = await supabase
       .from('produtos')
-      .select('id, descricao, preco_venda, peso, estoque(quantidade)')
-      .order('descricao');
+      .select('id, codigo, nome, descricao, preco, peso, estoque')
+      .eq('ativo', true)
+      .order('nome');
     if (data) {
-      const productsWithEstoque = data.map(p => ({
-        ...p,
-        estoque: Array.isArray(p.estoque) ? p.estoque : [p.estoque]
-      }));
-      setProdutos(productsWithEstoque as Produto[]);
+      setProdutos(data as Produto[]);
     }
   };
 
@@ -94,11 +94,10 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
     const produto = produtos.find(p => p.id === produtoSelecionado);
     if (!produto) return;
 
-    const estoque = produto.estoque[0]?.quantidade || 0;
-    if (quantidade > estoque) {
+    if (quantidade > produto.estoque) {
       toast({
         title: "Estoque insuficiente",
-        description: `Apenas ${estoque} unidades disponíveis`,
+        description: `Apenas ${produto.estoque} unidades disponíveis`,
         variant: "destructive",
       });
       return;
@@ -114,20 +113,20 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
       return;
     }
 
-    const precoUnitario = produto.peso && produto.peso > 0 
-      ? (produto.preco_venda / produto.peso)
-      : produto.preco_venda;
+    const precoUnitario = produto.preco;
 
     setItens([...itens, {
       produto_id: produto.id,
-      descricao: produto.descricao,
+      descricao: produto.descricao || produto.nome,
       quantidade,
       preco_unitario: precoUnitario,
       peso: produto.peso,
+      desconto: desconto,
     }]);
 
     setProdutoSelecionado("");
     setQuantidade(1);
+    setDesconto(0);
   };
 
   const removeItem = (produto_id: string) => {
@@ -150,7 +149,10 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
       const { data: numeroOrcamento } = await supabase.rpc('gerar_numero_orcamento');
 
       // Criar orçamento
-      const valorTotal = itens.reduce((sum, item) => sum + (item.quantidade * item.preco_unitario), 0);
+      const valorTotal = itens.reduce((sum, item) => {
+        const subtotal = item.quantidade * item.preco_unitario;
+        return sum + (subtotal - (subtotal * item.desconto / 100));
+      }, 0);
       
       const { data: orcamento, error: orcError } = await supabase
         .from('orcamentos')
@@ -167,13 +169,19 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
       if (orcError) throw orcError;
 
       // Adicionar itens
-      const orcamentoItens = itens.map(item => ({
-        orcamento_id: orcamento.id,
-        produto_id: item.produto_id,
-        quantidade: item.quantidade,
-        preco_unitario: item.preco_unitario,
-        subtotal: item.quantidade * item.preco_unitario,
-      }));
+      const orcamentoItens = itens.map(item => {
+        const subtotal = item.quantidade * item.preco_unitario;
+        const valorDesconto = subtotal * item.desconto / 100;
+        return {
+          orcamento_id: orcamento.id,
+          produto_id: item.produto_id,
+          quantidade: item.quantidade,
+          preco_unitario: item.preco_unitario,
+          desconto: item.desconto,
+          peso: item.peso,
+          subtotal: subtotal - valorDesconto,
+        };
+      });
 
       const { error: itensError } = await supabase
         .from('orcamento_itens')
@@ -231,14 +239,22 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
         data: dataAtual,
         validade: dataValidade.toLocaleDateString('pt-BR'),
         cliente,
-        itens: itens.map(item => ({
-          descricao: item.descricao,
-          quantidade: item.quantidade,
-          preco_unitario: item.preco_unitario,
-          subtotal: item.quantidade * item.preco_unitario,
-          peso: item.peso || undefined,
-        })),
-        valor_total: itens.reduce((sum, item) => sum + (item.quantidade * item.preco_unitario), 0),
+        itens: itens.map(item => {
+          const subtotal = item.quantidade * item.preco_unitario;
+          const valorDesconto = subtotal * item.desconto / 100;
+          return {
+            descricao: item.descricao,
+            quantidade: item.quantidade,
+            preco_unitario: item.preco_unitario,
+            desconto: item.desconto,
+            subtotal: subtotal - valorDesconto,
+            peso: item.peso || undefined,
+          };
+        }),
+        valor_total: itens.reduce((sum, item) => {
+          const subtotal = item.quantidade * item.preco_unitario;
+          return sum + (subtotal - (subtotal * item.desconto / 100));
+        }, 0),
         observacoes,
       };
 
@@ -259,9 +275,13 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
     setItens([]);
     setProdutoSelecionado("");
     setQuantidade(1);
+    setDesconto(0);
   };
 
-  const valorTotal = itens.reduce((sum, item) => sum + (item.quantidade * item.preco_unitario), 0);
+  const valorTotal = itens.reduce((sum, item) => {
+    const subtotal = item.quantidade * item.preco_unitario;
+    return sum + (subtotal - (subtotal * item.desconto / 100));
+  }, 0);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -296,7 +316,7 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
           <div className="border border-border rounded-lg p-4 space-y-4">
             <h3 className="font-semibold">Adicionar Produtos</h3>
             
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
               <div className="md:col-span-2 space-y-2">
                 <Label>Produto</Label>
                 <Select value={produtoSelecionado} onValueChange={setProdutoSelecionado}>
@@ -304,26 +324,35 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
                     <SelectValue placeholder="Selecione um produto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {produtos.map(produto => {
-                      const estoque = produto.estoque[0]?.quantidade || 0;
-                      return (
-                        <SelectItem key={produto.id} value={produto.id}>
-                          {produto.descricao} - R$ {produto.preco_venda.toFixed(2)} (Estoque: {estoque})
-                        </SelectItem>
-                      );
-                    })}
+                    {produtos.map(produto => (
+                      <SelectItem key={produto.id} value={produto.id}>
+                        {produto.nome || produto.descricao} - R$ {produto.preco.toFixed(2)} (Estoque: {produto.estoque})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>Quantidade</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quantidade}
+                  onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Desconto (%)</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    min="1"
-                    value={quantidade}
-                    onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={desconto}
+                    onChange={(e) => setDesconto(parseFloat(e.target.value) || 0)}
                   />
                   <Button onClick={addItem} type="button">
                     <Plus className="h-4 w-4" />
@@ -342,11 +371,12 @@ export default function AddOrcamentoDialog({ onOrcamentoAdded }: { onOrcamentoAd
                         <p className="font-medium">{item.descricao}</p>
                         <p className="text-sm text-muted-foreground">
                           {item.quantidade} x R$ {item.preco_unitario.toFixed(2)}
+                          {item.desconto > 0 && ` - ${item.desconto}% desc.`}
                         </p>
                       </div>
                       <div className="flex items-center gap-4">
                         <p className="font-semibold">
-                          R$ {(item.quantidade * item.preco_unitario).toFixed(2)}
+                          R$ {((item.quantidade * item.preco_unitario) - ((item.quantidade * item.preco_unitario) * item.desconto / 100)).toFixed(2)}
                         </p>
                         <Button
                           size="icon"

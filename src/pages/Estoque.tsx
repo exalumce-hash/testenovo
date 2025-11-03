@@ -54,37 +54,45 @@ export default function Estoque() {
 
   const fetchEstoque = async () => {
     try {
-      const { data: estoqueData, error: estoqueError } = await supabase
-        .from('estoque')
-        .select('id, quantidade, quantidade_minima, produtos(descricao, codigo, peso, preco_por_kg, preco_venda, tipo, localizacao)')
-        .order('quantidade', { ascending: true });
+      const { data: produtosData, error: produtosError } = await supabase
+        .from('produtos')
+        .select('id, codigo, nome, descricao, estoque, estoque_minimo, peso, preco, ativo')
+        .eq('ativo', true)
+        .order('estoque', { ascending: true });
 
-      if (estoqueError) throw estoqueError;
-      setEstoque(estoqueData || []);
+      if (produtosError) throw produtosError;
+
+      // Transformar dados para formato esperado
+      const estoqueData = (produtosData || []).map(p => ({
+        id: p.id,
+        quantidade: p.estoque,
+        quantidade_minima: p.estoque_minimo,
+        produtos: {
+          descricao: p.descricao || p.nome,
+          codigo: p.codigo,
+          peso: p.peso,
+          preco_por_kg: null,
+          preco_venda: p.preco,
+        }
+      }));
+
+      setEstoque(estoqueData);
 
       // Calculate totals
       let kg = 0;
       let valor = 0;
-      (estoqueData || []).forEach(item => {
+      estoqueData.forEach(item => {
         const produto = item.produtos;
         if (produto?.peso) {
           kg += item.quantidade * produto.peso;
         }
-        // Usar preco_venda diretamente (preço por unidade)
         valor += item.quantidade * (produto?.preco_venda || 0);
       });
       setTotalKg(kg);
       setValorTotal(valor);
 
-      // Fetch movimentações
-      const { data: movData, error: movError } = await supabase
-        .from('movimentacao_estoque')
-        .select('id, tipo, quantidade, created_at, produtos(descricao)')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (movError) throw movError;
-      setMovimentacoes(movData || []);
+      // Movimentações não implementadas ainda
+      setMovimentacoes([]);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar estoque",
