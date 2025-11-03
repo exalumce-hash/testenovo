@@ -72,7 +72,7 @@ export default function Orcamentos() {
       // Buscar dados do orçamento
       const { data: orcamento, error: orcError } = await supabase
         .from('orcamentos')
-        .select('*, clientes(*), orcamento_itens(*, produtos(*))')
+        .select('*, clientes(*), orcamento_itens(*, produtos(*), kits(*))')
         .eq('id', orcamentoId)
         .single();
 
@@ -97,11 +97,11 @@ export default function Orcamentos() {
         validade: dataValidade.toLocaleDateString('pt-BR'),
         cliente: orcamento.clientes,
         itens: (orcamento.orcamento_itens || []).map((item: any) => ({
-          descricao: item.produtos?.descricao || '',
+          descricao: item.produtos?.nome || item.produtos?.descricao || item.kits?.nome || '',
           quantidade: item.quantidade,
           preco_unitario: item.preco_unitario,
           subtotal: item.subtotal,
-          peso: item.produtos?.peso,
+          peso: item.produtos?.peso || null,
         })),
         valor_total: orcamento.valor_total,
         observacoes: orcamento.observacoes,
